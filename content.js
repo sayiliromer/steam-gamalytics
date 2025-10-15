@@ -4,8 +4,9 @@
     const appId = m[1];
     const targetEl = document.querySelector(".user_reviews_summary_row")?.parentElement;
 
-// Find the "Is this game relevant to you?" block
-const referenceEl = document.querySelector(".block.responsive_apppage_details_right.heading");
+    // Find the "Is this game relevant to you?" block
+    const referenceEl = document.querySelector(".glance_ctn_responsive_left");
+
 
     if (!referenceEl) return;
 
@@ -49,68 +50,15 @@ const referenceEl = document.querySelector(".block.responsive_apppage_details_ri
         const price = d.price ?? d.currentPrice ?? null;
         const releaseDate = d.releaseDate ?? d.releasedAt ?? null;
 
-        // Calculate differences if we have previous data
-        let differences = null;
-        if (previousData) {
-            const prevReleased = previousData.unreleased === false;
-            const prevCopiesSold =
-                previousData.copiesSold ??
-                previousData.owners ??
-                previousData?.estimateDetails?.reviewBased ??
-                0;
-            const prevRevenue =
-                previousData.revenue ??
-                previousData.totalRevenue ??
-                previousData.grossRevenue ??
-                previousData.netRevenue ??
-                previousData?.estimateDetails?.revenue ??
-                null;
-            const prevReviewScore =
-                previousData.reviewScore ?? previousData?.history?.at(-1)?.score ?? null;
-            const prevReviewCount =
-                previousData.reviewsSteam ??
-                previousData.reviews ??
-                previousData?.history?.at(-1)?.reviews ??
-                null;
-            const prevWishlists =
-                previousData.wishlists ??
-                previousData?.history?.at(-1)?.wishlists ??
-                null;
-
-            differences = {
-                copiesSold: Number(copiesSold) - Number(prevCopiesSold),
-                revenue: Number(revenue) - Number(prevRevenue),
-                reviewScore: Number(reviewScore) - Number(prevReviewScore),
-                reviewCount: Number(reviewCount) - Number(prevReviewCount),
-                wishlists: Number(wishlists) - Number(prevWishlists),
-            };
-        }
-
         console.log(d);
         // Create a new info block
         const newBlock = document.createElement("div");
         newBlock.className = "block responsive_apppage_details_left";
+
         if(released) {
             // If period < 7 days, extrapolate weekly sales
             const sales7Days = calcSalesLast7Days(d.history);
             const avgPlaytime = d.avgPlaytime ?? d?.avgPlaytime ?? 0;
-            // infoDiv.innerHTML = `
-            //   <div class="game_review_summary">
-            //     <b>Gamalytics info</b>
-            //     ${isCached ? ` (cached ${cacheAge != null ? `${fmtTimeAgo(Date.now() - cacheAge)}` : ""})` : ""}
-            //     <br>
-            //     <b>Gross revenue:</b> ${fmtMoney(revenue)}
-            //     <br>
-            //     <b>Coppies sold:</b> ${copiesSold.toLocaleString()}
-            //     <br>
-            //     <b>Weeky sales:</b> ${sales7Days.toLocaleString()}
-            //     <br>
-            //     <b>Avg playtime:</b> ${avgPlaytime.toFixed(1)} hrs
-            //     <br>
-            //     <b>Current players:</b> ${currentPlayers}
-            //   </div>
-            // `;
-
             newBlock.innerHTML = `
               <div class="game_review_summary">
                 <b>Gamalytics info</b>
@@ -141,7 +89,7 @@ const referenceEl = document.querySelector(".block.responsive_apppage_details_ri
             
         // Insert below review info
         //targetEl.insertAdjacentElement("afterend", infoDiv);
-        referenceEl.parentElement.insertBefore(newBlock, referenceEl);
+        referenceEl.appendChild(newBlock);
     });
 
        function fmtInt(v) {
