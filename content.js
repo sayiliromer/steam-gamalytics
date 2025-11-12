@@ -50,41 +50,63 @@
         const price = d.price ?? d.currentPrice ?? null;
         const releaseDate = d.releaseDate ?? d.releasedAt ?? null;
 
-        console.log(d);
+        // Create a new info block
         // Create a new info block
         const newBlock = document.createElement("div");
-        newBlock.className = "block responsive_apppage_details_left";
 
         if(released) {
-            // If period < 7 days, extrapolate weekly sales
             const sales7Days = calcSalesLast7Days(d.history);
             const avgPlaytime = d.avgPlaytime ?? d?.avgPlaytime ?? 0;
             newBlock.innerHTML = `
-              <div class="game_review_summary">
-                <b>Gamalytics info</b>
-                ${isCached ? ` (cached ${cacheAge != null ? `${fmtTimeAgo(Date.now() - cacheAge)}` : ""})` : ""}
-                <br>
-                <b>Gross revenue:</b> ${fmtMoney(revenue)}
-                <br>
-                <b>Coppies sold:</b> ${copiesSold.toLocaleString()}
-                <br>
-                <b>Weeky sales:</b> ${sales7Days.toLocaleString()}
-                <br>
-                <b>Avg playtime:</b> ${avgPlaytime.toFixed(1)} hrs
-                <br>
-                <b>Current players:</b> ${currentPlayers}
-              </div>
+            <div class="gamalytics-block">
+                <div class="gamalytics-header">
+                <b>Gamalytics</b>
+                ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
+                </div>
+                <div class="gamalytics-stats">
+                <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Revenue</span>
+                    <span class="gamalytics-value">${fmtMoney(revenue)}</span>
+                </div>
+                <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Copies Sold</span>
+                    <span class="gamalytics-value">${copiesSold.toLocaleString()}</span>
+                </div>
+                <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Weekly Sales</span>
+                    <span class="gamalytics-value">${sales7Days.toLocaleString()}</span>
+                </div>
+                <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Avg Playtime</span>
+                    <span class="gamalytics-value">${avgPlaytime.toFixed(1)} hrs</span>
+                </div>
+                <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Current Players</span>
+                    <span class="gamalytics-value">${currentPlayers?.toLocaleString() ?? "N/A"}</span>
+                </div>
+                </div>
+            </div>
             `
         }
         else {
-          newBlock.innerHTML = `
-            <div class="game_review_summary">
-                <b>Gamalytics info</b>
-                ${isCached ? ` (cached ${cacheAge != null ? `${fmtTimeAgo(Date.now() - cacheAge)}` : ""})` : ""}
-                <br>
-                <b>Wishlist:</b> ${wishlists.toLocaleString()} (${dailyWishlists.toLocaleString()} daily)
+        newBlock.innerHTML = `
+            <div class="gamalytics-block">
+            <div class="gamalytics-header">
+                <b>Gamalytics</b>
+                ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
             </div>
-          `;
+            <div class="gamalytics-stats">
+                <div class="gamalytics-stat">
+                <span class="gamalytics-label">Wishlists</span>
+                <span class="gamalytics-value">${wishlists.toLocaleString()}</span>
+                </div>
+                <div class="gamalytics-stat">
+                <span class="gamalytics-label">Daily Gain</span>
+                <span class="gamalytics-value">+${dailyWishlists.toLocaleString()}</span>
+                </div>
+            </div>
+            </div>
+        `;
         }
             
         // Insert below review info
