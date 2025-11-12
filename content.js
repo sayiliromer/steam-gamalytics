@@ -1,118 +1,136 @@
 (function () {
-    const m = location.pathname.match(/\/app\/(\d+)\b/);
-    if (!m) return;
-    const appId = m[1];
-    const targetEl = document.querySelector(".user_reviews_summary_row")?.parentElement;
+        const m = location.pathname.match(/\/app\/(\d+)\b/);
+        if (!m) return;
+        const appId = m[1];
+        const targetEl = document.querySelector(".user_reviews_summary_row")?.parentElement;
 
-    // Find the "Is this game relevant to you?" block
-    const referenceEl = document.querySelector(".glance_ctn_responsive_left");
+        // Find the "Is this game relevant to you?" block
+        const referenceEl = document.querySelector(".glance_ctn_responsive_left");
 
+        if (!referenceEl) return;
 
-    if (!referenceEl) return;
+        // Create a new info block with loading spinner
+        const newBlock = document.createElement("div");
+        newBlock.innerHTML = `
+        <div class="gamalytics-block">
+            <div class="gamalytics-header">
+            <b>Gamalytics</b>
+            </div>
+            <div class="gamalytics-loading">
+            <div class="gamalytics-spinner"></div>
+            <span>Loading data...</span>
+            </div>
+        </div>
+        `;
+        referenceEl.appendChild(newBlock);
 
         chrome.runtime.sendMessage({ type: "fetchGamalytic", appId }, (res) => {
-        if (!res?.ok || !res.data) {
-            return;
-        }
-        
-        const d = res.data;
-        const previousData = res.previousData;
-        const lastVisit = res.lastVisit;
-        const cacheAge = res.cacheAge;
-        const isCached = res.cached;
+            if (!res?.ok || !res.data) {
+                newBlock.innerHTML = `
+                <div class="gamalytics-block">
+                    <div class="gamalytics-header">
+                    <b>Gamalytics</b>
+                    </div>
+                    <div class="gamalytics-error">
+                    Failed to load data
+                    </div>
+                </div>
+                `;
+                return;
+            }
+            
+            const d = res.data;
+            const previousData = res.previousData;
+            const lastVisit = res.lastVisit;
+            const cacheAge = res.cacheAge;
+            const isCached = res.cached;
 
-        const released = d.unreleased === false;
+            const released = d.unreleased === false;
 
-        const copiesSold =
-            d.copiesSold ?? d.owners ?? d?.estimateDetails?.reviewBased ?? 0;
+            const copiesSold =
+                d.copiesSold ?? d.owners ?? d?.estimateDetails?.reviewBased ?? 0;
 
-        const revenue =
-            d.revenue ??
-            d.totalRevenue ??
-            d.grossRevenue ??
-            d.netRevenue ??
-            d?.estimateDetails?.revenue ??
-            null;
+            const revenue =
+                d.revenue ??
+                d.totalRevenue ??
+                d.grossRevenue ??
+                d.netRevenue ??
+                d?.estimateDetails?.revenue ??
+                null;
 
-        const dailyWishlists = Math.floor(d.predictions?.gain ?? 0);
+            const dailyWishlists = Math.floor(d.predictions?.gain ?? 0);
 
-        const reviewScore = d.reviewScore ?? d?.history?.at(-1)?.score ?? null;
+            const reviewScore = d.reviewScore ?? d?.history?.at(-1)?.score ?? null;
 
-        const reviewCount =
-            d.reviewsSteam ?? d.reviews ?? d?.history?.at(-1)?.reviews ?? null;
+            const reviewCount =
+                d.reviewsSteam ?? d.reviews ?? d?.history?.at(-1)?.reviews ?? null;
 
-        const wishlists = d.wishlists ?? d?.history?.at(-1)?.wishlists ?? null;
+            const wishlists = d.wishlists ?? d?.history?.at(-1)?.wishlists ?? null;
 
-        // Additional metrics that might be available
-        const peakPlayers = d.peakPlayers ?? d?.history?.at(-1)?.peakPlayers ?? null;
-        const currentPlayers =
-            d.currentPlayers ?? d?.history?.at(-1)?.players ?? null;
-        const price = d.price ?? d.currentPrice ?? null;
-        const releaseDate = d.releaseDate ?? d.releasedAt ?? null;
+            // Additional metrics that might be available
+            const peakPlayers = d.peakPlayers ?? d?.history?.at(-1)?.peakPlayers ?? null;
+            const currentPlayers =
+                d.currentPlayers ?? d?.history?.at(-1)?.players ?? null;
+            const price = d.price ?? d.currentPrice ?? null;
+            const releaseDate = d.releaseDate ?? d.releasedAt ?? null;
 
-        // Create a new info block
-        // Create a new info block
-        const newBlock = document.createElement("div");
+            console.log(d);
 
-        if(released) {
-            const sales7Days = calcSalesLast7Days(d.history);
-            const avgPlaytime = d.avgPlaytime ?? d?.avgPlaytime ?? 0;
+            if(released) {
+                const sales7Days = calcSalesLast7Days(d.history);
+                const avgPlaytime = d.avgPlaytime ?? d?.avgPlaytime ?? 0;
+                newBlock.innerHTML = `
+                <div class="gamalytics-block">
+                    <div class="gamalytics-header">
+                    <b>📊 Gamalytics</b>
+                    ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
+                    </div>
+                    <div class="gamalytics-stats">
+                    <div class="gamalytics-stat">
+                        <span class="gamalytics-label">Revenue</span>
+                        <span class="gamalytics-value">${fmtMoney(revenue)}</span>
+                    </div>
+                    <div class="gamalytics-stat">
+                        <span class="gamalytics-label">Copies Sold</span>
+                        <span class="gamalytics-value">${copiesSold.toLocaleString()}</span>
+                    </div>
+                    <div class="gamalytics-stat">
+                        <span class="gamalytics-label">Weekly Sales</span>
+                        <span class="gamalytics-value">${sales7Days.toLocaleString()}</span>
+                    </div>
+                    <div class="gamalytics-stat">
+                        <span class="gamalytics-label">Avg Playtime</span>
+                        <span class="gamalytics-value">${avgPlaytime.toFixed(1)} hrs</span>
+                    </div>
+                    <div class="gamalytics-stat">
+                        <span class="gamalytics-label">Current Players</span>
+                        <span class="gamalytics-value">${currentPlayers?.toLocaleString() ?? "N/A"}</span>
+                    </div>
+                    </div>
+                </div>
+                `
+            }
+            else {
             newBlock.innerHTML = `
-            <div class="gamalytics-block">
+                <div class="gamalytics-block">
                 <div class="gamalytics-header">
-                <b>Gamalytics</b>
-                ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
+                    <b>📊 Gamalytics</b>
+                    ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
                 </div>
                 <div class="gamalytics-stats">
-                <div class="gamalytics-stat">
-                    <span class="gamalytics-label">Revenue</span>
-                    <span class="gamalytics-value">${fmtMoney(revenue)}</span>
-                </div>
-                <div class="gamalytics-stat">
-                    <span class="gamalytics-label">Copies Sold</span>
-                    <span class="gamalytics-value">${copiesSold.toLocaleString()}</span>
-                </div>
-                <div class="gamalytics-stat">
-                    <span class="gamalytics-label">Weekly Sales</span>
-                    <span class="gamalytics-value">${sales7Days.toLocaleString()}</span>
-                </div>
-                <div class="gamalytics-stat">
-                    <span class="gamalytics-label">Avg Playtime</span>
-                    <span class="gamalytics-value">${avgPlaytime.toFixed(1)} hrs</span>
-                </div>
-                <div class="gamalytics-stat">
-                    <span class="gamalytics-label">Current Players</span>
-                    <span class="gamalytics-value">${currentPlayers?.toLocaleString() ?? "N/A"}</span>
+                    <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Wishlists</span>
+                    <span class="gamalytics-value">${wishlists.toLocaleString()}</span>
+                    </div>
+                    <div class="gamalytics-stat">
+                    <span class="gamalytics-label">Daily Gain</span>
+                    <span class="gamalytics-value">+${dailyWishlists.toLocaleString()}</span>
+                    </div>
                 </div>
                 </div>
-            </div>
-            `
-        }
-        else {
-        newBlock.innerHTML = `
-            <div class="gamalytics-block">
-            <div class="gamalytics-header">
-                <b>Gamalytics</b>
-                ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
-            </div>
-            <div class="gamalytics-stats">
-                <div class="gamalytics-stat">
-                <span class="gamalytics-label">Wishlists</span>
-                <span class="gamalytics-value">${wishlists.toLocaleString()}</span>
-                </div>
-                <div class="gamalytics-stat">
-                <span class="gamalytics-label">Daily Gain</span>
-                <span class="gamalytics-value">+${dailyWishlists.toLocaleString()}</span>
-                </div>
-            </div>
-            </div>
-        `;
-        }
-            
-        // Insert below review info
-        //targetEl.insertAdjacentElement("afterend", infoDiv);
-        referenceEl.appendChild(newBlock);
-    });
+            `;
+            }
+        });
 
        function fmtInt(v) {
         if (v == null || v === "N/A") return "N/A";
