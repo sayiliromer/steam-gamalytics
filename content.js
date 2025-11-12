@@ -82,7 +82,7 @@
                 newBlock.innerHTML = `
                 <div class="gamalytics-block">
                     <div class="gamalytics-header">
-                    <b>📊 Gamalytics</b>
+                    <b>Gamalytics</b>
                     ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
                     </div>
                     <div class="gamalytics-stats">
@@ -114,7 +114,7 @@
             newBlock.innerHTML = `
                 <div class="gamalytics-block">
                 <div class="gamalytics-header">
-                    <b>📊 Gamalytics</b>
+                    <b>Gamalytics</b>
                     ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
                 </div>
                 <div class="gamalytics-stats">
