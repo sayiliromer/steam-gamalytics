@@ -2,10 +2,9 @@
         const m = location.pathname.match(/\/app\/(\d+)\b/);
         if (!m) return;
         const appId = m[1];
-        const targetEl = document.querySelector(".user_reviews_summary_row")?.parentElement;
 
         // Find the "Is this game relevant to you?" block
-        const referenceEl = document.querySelector(".glance_ctn_responsive_left");
+        const referenceEl = document.querySelector(".glance_mid_ctn");
 
         if (!referenceEl) return;
 
