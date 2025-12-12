@@ -1,19 +1,21 @@
 (function () {
-        const m = location.pathname.match(/\/app\/(\d+)\b/);
-        if (!m) return;
-        const appId = m[1];
+    const m = location.pathname.match(/\/app\/(\d+)\b/);
+    if (!m) return;
+    const appId = m[1];
 
-        // Find the "Is this game relevant to you?" block
-        const referenceEl = document.querySelector(".glance_mid_ctn");
+    // Find the "Is this game relevant to you?" block
+    const referenceEl = document.querySelector(".glance_mid_ctn");
 
-        if (!referenceEl) return;
+    if (!referenceEl) return;
 
-        // Create a new info block with loading spinner
-        const newBlock = document.createElement("div");
-        newBlock.innerHTML = `
+    // Create a new info block with loading spinner
+    const newBlock = document.createElement("div");
+    newBlock.innerHTML = `
         <div class="gamalytics-block">
             <div class="gamalytics-header">
+            <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
             <b>Gamalytics</b>
+            </a>
             </div>
             <div class="gamalytics-loading">
             <div class="gamalytics-spinner"></div>
@@ -21,67 +23,77 @@
             </div>
         </div>
         `;
-        referenceEl.appendChild(newBlock);
+    referenceEl.appendChild(newBlock);
 
-        chrome.runtime.sendMessage({ type: "fetchGamalytic", appId }, (res) => {
-            if (!res?.ok || !res.data) {
-                newBlock.innerHTML = `
+    chrome.runtime.sendMessage({ type: "fetchGamalytic", appId }, (res) => {
+        if (!res?.ok || !res.data) {
+            newBlock.innerHTML = `
                 <div class="gamalytics-block">
                     <div class="gamalytics-header">
+                    <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
                     <b>Gamalytics</b>
+                    </a>
                     </div>
                     <div class="gamalytics-error">
                     Failed to load data
                     </div>
                 </div>
                 `;
-                return;
-            }
-            
-            const d = res.data;
-            const previousData = res.previousData;
-            const lastVisit = res.lastVisit;
-            const cacheAge = res.cacheAge;
-            const isCached = res.cached;
+            return;
+        }
 
-            const released = d.unreleased === false;
+        const d = res.data;
+        const previousData = res.previousData;
+        const lastVisit = res.lastVisit;
+        const cacheAge = res.cacheAge;
+        const isCached = res.cached;
 
-            const copiesSold =
-                d.copiesSold ?? d.owners ?? d?.estimateDetails?.reviewBased ?? 0;
+        const released = d.unreleased === false;
 
-            const revenue =
-                d.revenue ??
-                d.totalRevenue ??
-                d.grossRevenue ??
-                d.netRevenue ??
-                d?.estimateDetails?.revenue ??
-                null;
+        const copiesSold =
+            d.copiesSold ?? d.owners ?? d?.estimateDetails?.reviewBased ?? 0;
 
-            const dailyWishlists = Math.floor(d.predictions?.gain ?? 0);
+        const revenue =
+            d.revenue ??
+            d.totalRevenue ??
+            d.grossRevenue ??
+            d.netRevenue ??
+            d?.estimateDetails?.revenue ??
+            null;
 
-            const reviewScore = d.reviewScore ?? d?.history?.at(-1)?.score ?? null;
+        const dailyWishlists = Math.floor(d.predictions?.gain ?? 0);
 
-            const reviewCount =
-                d.reviewsSteam ?? d.reviews ?? d?.history?.at(-1)?.reviews ?? null;
+        const reviewScore = d.reviewScore ?? d?.history?.at(-1)?.score ?? null;
 
-            const wishlists = d.wishlists ?? d?.history?.at(-1)?.wishlists ?? null;
+        const reviewCount =
+            d.reviewsSteam ?? d.reviews ?? d?.history?.at(-1)?.reviews ?? null;
 
-            // Additional metrics that might be available
-            const peakPlayers = d.peakPlayers ?? d?.history?.at(-1)?.peakPlayers ?? null;
-            const currentPlayers =
-                d.currentPlayers ?? d?.history?.at(-1)?.players ?? null;
-            const price = d.price ?? d.currentPrice ?? null;
-            const releaseDate = d.releaseDate ?? d.releasedAt ?? null;
+        const wishlists = d.wishlists ?? d?.history?.at(-1)?.wishlists ?? null;
 
-            console.log(d);
+        // Additional metrics that might be available
+        const peakPlayers = d.peakPlayers ?? d?.history?.at(-1)?.peakPlayers ?? null;
+        const currentPlayers =
+            d.currentPlayers ?? d?.history?.at(-1)?.players ?? null;
+        const price = d.price ?? d.currentPrice ?? null;
+        const releaseDate = d.releaseDate ?? d.releasedAt ?? null;
 
-            if(released) {
-                const sales7Days = calcSalesLast7Days(d.history);
-                const avgPlaytime = d.avgPlaytime ?? d?.avgPlaytime ?? 0;
-                newBlock.innerHTML = `
+        console.log(d);
+
+        if (released) {
+            const sales7Days = calcSalesLast7Days(d.history);
+            const avgPlaytime = d.avgPlaytime ?? d?.avgPlaytime ?? 0;
+            const ratio = (reviewCount && reviewCount > 0) ? (copiesSold / reviewCount) : 0;
+            let ratioColor = '';
+            if (ratio < 10 || ratio > 90) ratioColor = 'red';
+            else if (ratio < 15 || ratio > 45) ratioColor = 'orange';
+
+            const ratioStyle = ratioColor ? `style="color: ${ratioColor} !important;"` : '';
+            newBlock.innerHTML = `
                 <div class="gamalytics-block">
                     <div class="gamalytics-header">
+                    <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
                     <b>Gamalytics</b>
+                    </a>
                     ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
                     </div>
                     <div class="gamalytics-stats">
@@ -92,6 +104,10 @@
                     <div class="gamalytics-stat">
                         <span class="gamalytics-label">Copies Sold</span>
                         <span class="gamalytics-value">${copiesSold.toLocaleString()}</span>
+                    </div>
+                    <div class="gamalytics-stat">
+                        <span class="gamalytics-label">Copies/Review</span>
+                        <span class="gamalytics-value" ${ratioStyle}>${ratio.toFixed(1)}</span>
                     </div>
                     <div class="gamalytics-stat">
                         <span class="gamalytics-label">Weekly Sales</span>
@@ -108,12 +124,14 @@
                     </div>
                 </div>
                 `
-            }
-            else {
+        }
+        else {
             newBlock.innerHTML = `
                 <div class="gamalytics-block">
                 <div class="gamalytics-header">
+                    <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
                     <b>Gamalytics</b>
+                    </a>
                     ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
                 </div>
                 <div class="gamalytics-stats">
@@ -128,50 +146,50 @@
                 </div>
                 </div>
             `;
-            }
-        });
+        }
+    });
 
-       function fmtInt(v) {
+    function fmtInt(v) {
         if (v == null || v === "N/A") return "N/A";
         const n = Number(v);
         return Number.isFinite(n) ? n.toLocaleString() : String(v);
     }
 
     function calcSalesLast7Days(history) {
-          if (!history?.length) return 0;
+        if (!history?.length) return 0;
 
-          const h = [...history].sort((a, b) => a.timeStamp - b.timeStamp);
-          const last = h[h.length - 1];
-          const targetTime = last.timeStamp - 7 * 24 * 60 * 60 * 1000; // 7 days before last
+        const h = [...history].sort((a, b) => a.timeStamp - b.timeStamp);
+        const last = h[h.length - 1];
+        const targetTime = last.timeStamp - 7 * 24 * 60 * 60 * 1000; // 7 days before last
 
-          // Find closest entry before the 7-day mark
-          let before = null;
-          let after = null;
-          for (let i = h.length - 2; i >= 0; i--) {
+        // Find closest entry before the 7-day mark
+        let before = null;
+        let after = null;
+        for (let i = h.length - 2; i >= 0; i--) {
             if (h[i].timeStamp <= targetTime) {
-              before = h[i];
-              after = h[i + 1] || last;
-              break;
+                before = h[i];
+                after = h[i + 1] || last;
+                break;
             }
-          }
-      
-          let salesAt7DaysAgo;
-      
-          if (before && after) {
+        }
+
+        let salesAt7DaysAgo;
+
+        if (before && after) {
             // interpolate between 'before' and 'after'
             const t = (targetTime - before.timeStamp) / (after.timeStamp - before.timeStamp);
             salesAt7DaysAgo = before.sales + t * (after.sales - before.sales);
-          } else {
+        } else {
             // no 7-day-old data → extrapolate using oldest entry
             const first = h[0];
             const daysBetween = (last.timeStamp - first.timeStamp) / (1000 * 60 * 60 * 24);
             const salesDiff = last.sales - first.sales;
             const salesPerDay = salesDiff / daysBetween;
             salesAt7DaysAgo = last.sales - salesPerDay * 7;
-          }
-      
-          const salesIn7Days = Math.round(last.sales - salesAt7DaysAgo);
-          return salesIn7Days;
+        }
+
+        const salesIn7Days = Math.round(last.sales - salesAt7DaysAgo);
+        return salesIn7Days;
     }
 
     function fmtCompact(v) {
