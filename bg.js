@@ -7,18 +7,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             const cacheKey = `gamalytic_${appId}`;
             const now = Date.now();
             const oneDay = 24 * 60 * 60 * 1000;
+            const normalizeGameData = (value) => value?.data ?? value;
 
             // Check cache first
             const cached = await chrome.storage.local.get(cacheKey);
             if (cached[cacheKey]) {
                 const { data, timestamp } = cached[cacheKey];
+                const normalizedData = normalizeGameData(data);
                 const timeDiff = now - timestamp;
 
                 if (timeDiff < oneDay) {
                     // Serve cached data
                     sendResponse({
                         ok: true,
-                        data,
+                        data: normalizedData,
                         cached: true,
                         cacheAge: timeDiff,
                         lastVisit: timestamp,
@@ -28,10 +30,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             }
 
             // Fetch fresh data
-            const url = `https://api.gamalytic.com/game/${appId}`;
+            const url = `https://gamalytic.com/api/game-details/${appId}`;
             const res = await fetch(url, { headers: { accept: "application/json" } });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+            const payload = await res.json();
+            const data = normalizeGameData(payload);
 
             // Store in cache
             await chrome.storage.local.set({
@@ -39,7 +42,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             });
 
             // Get previous data for comparison
-            const previousData = cached[cacheKey]?.data || null;
+            const previousData = normalizeGameData(cached[cacheKey]?.data) || null;
             const lastVisit = cached[cacheKey]?.timestamp || null;
 
             sendResponse({

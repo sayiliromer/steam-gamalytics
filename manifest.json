@@ -4,6 +4,10 @@
   "version": "1.0",
   "description": "Displays Gamalytics data like estimated revenue on Steam game pages.",
   "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://gamalytic.com/*",
+    "https://*.gamalytic.com/*"
+  ],
   "content_scripts": [
     {
       "matches": ["*://store.steampowered.com/app/*"],
