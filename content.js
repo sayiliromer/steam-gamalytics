@@ -265,13 +265,20 @@
     function renderCookieMeta(res) {
         if (res?.cookieStatus?.age != null) {
             const cookieAge = fmtTimeAgo(Date.now() - res.cookieStatus.age);
-            const expiresAt = res.cookieStatus.expiresAt
-                ? `, expires in ${fmtDuration(res.cookieStatus.expiresAt - Date.now())}`
-                : "";
-            return `<div class="gamalytics-meta"><span class="gamalytics-cache" title="${res.cookieStatus.name}${expiresAt}">cookie ${cookieAge} old</span></div>`;
+            const expiresLabel = fmtCookieExpiry(res.cookieStatus.expiresAt);
+            return `<div class="gamalytics-meta"><span class="gamalytics-cache" title="${res.cookieStatus.name}">cookie ${cookieAge} old, ${expiresLabel}</span></div>`;
         }
 
         return `<div class="gamalytics-meta"><span class="gamalytics-cache">no cookie</span></div>`;
+    }
+
+    function fmtCookieExpiry(expiresAt) {
+        if (!expiresAt) return "session cookie";
+
+        const msUntilExpiry = expiresAt - Date.now();
+        if (msUntilExpiry <= 0) return "expired";
+
+        return `expires in ${fmtDuration(msUntilExpiry)}`;
     }
 
     function fmtDuration(ms) {

@@ -1,4 +1,10 @@
 const CACHE_TTL = 24 * 60 * 60 * 1000;
+const BROWSER_CHECK_RETRY_DELAY = 3500;
+const BROWSER_CHECK_TAB_TIMEOUT = 20000;
+const BROWSER_CHECK_ATTEMPT_COOLDOWN = 5 * 60 * 1000;
+const LAST_BROWSER_CHECK_ATTEMPT_KEY = "gamalytic_last_browser_check_attempt";
+
+let browserCheckRecoveryPromise = null;
 
 function normalizeGameData(value) {
     return value?.data ?? value;
@@ -72,6 +78,105 @@ async function fetchGameDetails(appId) {
     return normalizeGameData(await res.json());
 }
 
+function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function waitForTabComplete(tabId, timeoutMs) {
+    return new Promise((resolve) => {
+        let settled = false;
+        const timeoutId = setTimeout(() => finish(), timeoutMs);
+
+        function finish() {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
+            chrome.tabs.onUpdated.removeListener(onUpdated);
+            resolve();
+        }
+
+        function onUpdated(updatedTabId, changeInfo) {
+            if (updatedTabId === tabId && changeInfo.status === "complete") {
+                finish();
+            }
+        }
+
+        chrome.tabs.onUpdated.addListener(onUpdated);
+        chrome.tabs.get(tabId)
+            .then((tab) => {
+                if (tab.status === "complete") finish();
+            })
+            .catch(() => finish());
+    });
+}
+
+async function shouldAttemptBrowserCheckRecovery() {
+    const stored = await chrome.storage.local.get(LAST_BROWSER_CHECK_ATTEMPT_KEY);
+    const lastAttempt = stored[LAST_BROWSER_CHECK_ATTEMPT_KEY] || 0;
+    return Date.now() - lastAttempt > BROWSER_CHECK_ATTEMPT_COOLDOWN;
+}
+
+async function refreshGamalyticBrowserAccess(appId) {
+    if (!chrome.tabs?.create || !(await shouldAttemptBrowserCheckRecovery())) {
+        return false;
+    }
+
+    if (!browserCheckRecoveryPromise) {
+        browserCheckRecoveryPromise = (async () => {
+            await chrome.storage.local.set({ [LAST_BROWSER_CHECK_ATTEMPT_KEY]: Date.now() });
+
+            let tab = null;
+            try {
+                tab = await chrome.tabs.create({
+                    url: `https://gamalytic.com/game/${appId}`,
+                    active: false,
+                });
+
+                if (tab.id) {
+                    await waitForTabComplete(tab.id, BROWSER_CHECK_TAB_TIMEOUT);
+                }
+                await delay(BROWSER_CHECK_RETRY_DELAY);
+                return true;
+            } finally {
+                if (tab?.id) {
+                    try {
+                        await chrome.tabs.remove(tab.id);
+                    } catch {
+                        // The user may have closed it first.
+                    }
+                }
+            }
+        })().finally(() => {
+            browserCheckRecoveryPromise = null;
+        });
+    }
+
+    return browserCheckRecoveryPromise;
+}
+
+async function fetchGameDetailsWithRecovery(appId) {
+    try {
+        return {
+            data: await fetchGameDetails(appId),
+            recoveredBrowserCheck: false,
+        };
+    } catch (error) {
+        if (!isLikelyBrowserCheck(error)) {
+            throw error;
+        }
+
+        const recoveryAttempted = await refreshGamalyticBrowserAccess(appId);
+        if (!recoveryAttempted) {
+            throw error;
+        }
+
+        return {
+            data: await fetchGameDetails(appId),
+            recoveredBrowserCheck: true,
+        };
+    }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type !== "fetchGamalytic") return;
 
@@ -103,8 +208,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 }
             }
 
-            // Fetch fresh data
-            const data = await fetchGameDetails(appId);
+            // Fetch fresh data, refreshing browser-check cookies once if Gamalytic blocks the API.
+            const { data, recoveredBrowserCheck } = await fetchGameDetailsWithRecovery(appId);
             const refreshedCookieStatus = await getGamalyticCookieStatus();
 
             // Store in cache
@@ -124,6 +229,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 lastVisit,
                 cacheAge: null,
                 cookieStatus: refreshedCookieStatus,
+                recoveredBrowserCheck,
             });
         } catch (e) {
             const cached = await chrome.storage.local.get(`gamalytic_${msg.appId}`);
