@@ -1,3 +1,77 @@
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function normalizeGameData(value) {
+    return value?.data ?? value;
+}
+
+function isLikelyBrowserCheck(error) {
+    return error?.status === 403 || error?.status === 429 || error?.status === 503 || error?.code === "NON_JSON_RESPONSE";
+}
+
+function cookieStorageKey(cookie) {
+    const expiresAt = cookie.expirationDate ? Math.round(cookie.expirationDate) : "session";
+    return `gamalytic_cookie_${cookie.name}_${cookie.domain}_${cookie.path}_${expiresAt}`;
+}
+
+async function getGamalyticCookieStatus() {
+    if (!chrome.cookies?.getAll) return null;
+
+    const cookies = await chrome.cookies.getAll({ domain: "gamalytic.com" });
+    const liveCookies = cookies.filter((cookie) => {
+        return !cookie.expirationDate || cookie.expirationDate * 1000 > Date.now();
+    });
+
+    if (!liveCookies.length) return null;
+
+    const browserCheckCookie =
+        liveCookies.find((cookie) => cookie.name === "cf_clearance") ||
+        liveCookies.find((cookie) => cookie.name.toLowerCase().includes("clearance")) ||
+        liveCookies
+            .filter((cookie) => cookie.expirationDate)
+            .sort((a, b) => b.expirationDate - a.expirationDate)[0] ||
+        liveCookies[0];
+
+    const key = cookieStorageKey(browserCheckCookie);
+    const stored = await chrome.storage.local.get(key);
+    const firstSeen = stored[key] || Date.now();
+
+    if (!stored[key]) {
+        await chrome.storage.local.set({ [key]: firstSeen });
+    }
+
+    return {
+        name: browserCheckCookie.name,
+        age: Date.now() - firstSeen,
+        firstSeen,
+        expiresAt: browserCheckCookie.expirationDate ? browserCheckCookie.expirationDate * 1000 : null,
+    };
+}
+
+async function fetchGameDetails(appId) {
+    const url = `https://gamalytic.com/api/game-details/${appId}`;
+    const res = await fetch(url, {
+        credentials: "include",
+        headers: {
+            accept: "application/json",
+        },
+    });
+
+    if (!res.ok) {
+        const error = new Error(`HTTP ${res.status}`);
+        error.status = res.status;
+        throw error;
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+        const error = new Error(`Expected JSON, got ${contentType || "unknown content type"}`);
+        error.code = "NON_JSON_RESPONSE";
+        throw error;
+    }
+
+    return normalizeGameData(await res.json());
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type !== "fetchGamalytic") return;
 
@@ -6,8 +80,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             const appId = msg.appId;
             const cacheKey = `gamalytic_${appId}`;
             const now = Date.now();
-            const oneDay = 24 * 60 * 60 * 1000;
-            const normalizeGameData = (value) => value?.data ?? value;
+            const cookieStatus = await getGamalyticCookieStatus();
 
             // Check cache first
             const cached = await chrome.storage.local.get(cacheKey);
@@ -16,13 +89,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 const normalizedData = normalizeGameData(data);
                 const timeDiff = now - timestamp;
 
-                if (timeDiff < oneDay) {
+                if (timeDiff < CACHE_TTL) {
                     // Serve cached data
                     sendResponse({
                         ok: true,
                         data: normalizedData,
                         cached: true,
                         cacheAge: timeDiff,
+                        cookieStatus,
                         lastVisit: timestamp,
                     });
                     return;
@@ -30,11 +104,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             }
 
             // Fetch fresh data
-            const url = `https://gamalytic.com/api/game-details/${appId}`;
-            const res = await fetch(url, { headers: { accept: "application/json" } });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const payload = await res.json();
-            const data = normalizeGameData(payload);
+            const data = await fetchGameDetails(appId);
+            const refreshedCookieStatus = await getGamalyticCookieStatus();
 
             // Store in cache
             await chrome.storage.local.set({
@@ -52,9 +123,36 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                 previousData,
                 lastVisit,
                 cacheAge: null,
+                cookieStatus: refreshedCookieStatus,
             });
         } catch (e) {
-            sendResponse({ ok: false, error: String(e) });
+            const cached = await chrome.storage.local.get(`gamalytic_${msg.appId}`);
+            const cacheEntry = cached[`gamalytic_${msg.appId}`];
+            const needsBrowserCheck = isLikelyBrowserCheck(e);
+            const cookieStatus = await getGamalyticCookieStatus();
+
+            if (cacheEntry?.data) {
+                const normalizedData = normalizeGameData(cacheEntry.data);
+                sendResponse({
+                    ok: true,
+                    data: normalizedData,
+                    cached: true,
+                    stale: true,
+                    cacheAge: Date.now() - cacheEntry.timestamp,
+                    cookieStatus,
+                    lastVisit: cacheEntry.timestamp,
+                    needsBrowserCheck,
+                    error: String(e),
+                });
+                return;
+            }
+
+            sendResponse({
+                ok: false,
+                needsBrowserCheck,
+                cookieStatus,
+                error: String(e),
+            });
         }
     })();
     return true; // keep channel open for async sendResponse

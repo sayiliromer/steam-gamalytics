@@ -2,6 +2,7 @@
     const m = location.pathname.match(/\/app\/(\d+)\b/);
     if (!m) return;
     const appId = m[1];
+    const gamalyticUrl = `https://gamalytic.com/game/${appId}`;
 
     // Find the "Is this game relevant to you?" block
     const referenceEl = document.querySelector(".glance_mid_ctn");
@@ -13,7 +14,7 @@
     newBlock.innerHTML = `
         <div class="gamalytics-block">
             <div class="gamalytics-header">
-            <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
+            <a href="${gamalyticUrl}" target="_blank" style="text-decoration: none; color: inherit;">
             <b>Gamalytics</b>
             </a>
             </div>
@@ -27,16 +28,28 @@
 
     chrome.runtime.sendMessage({ type: "fetchGamalytic", appId }, (res) => {
         if (!res?.ok || !res.data) {
+            const message = res?.needsBrowserCheck
+                ? "Gamalytic needs browser confirmation."
+                : "Failed to load data";
+            const cookieMeta = renderCookieMeta(res);
             newBlock.innerHTML = `
                 <div class="gamalytics-block">
                     <div class="gamalytics-header">
-                    <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
-                    <b>Gamalytics</b>
-                    </a>
+                    <div>
+                        <a href="${gamalyticUrl}" target="_blank" style="text-decoration: none; color: inherit;">
+                        <b>Gamalytics</b>
+                        </a>
+                        ${cookieMeta}
+                    </div>
                     </div>
                     <div class="gamalytics-error">
-                    Failed to load data
+                    ${message}
                     </div>
+                    ${res?.needsBrowserCheck ? `
+                    <a class="gamalytics-recovery" href="${gamalyticUrl}" target="_blank">
+                    Open Gamalytic, then refresh Steam
+                    </a>
+                    ` : ""}
                 </div>
                 `;
             return;
@@ -47,6 +60,16 @@
         const lastVisit = res.lastVisit;
         const cacheAge = res.cacheAge;
         const isCached = res.cached;
+        const cacheLabel = isCached && cacheAge != null
+            ? `${fmtTimeAgo(Date.now() - cacheAge)}${res.stale ? " stale" : ""}`
+            : "";
+        const cookieMeta = renderCookieMeta(res);
+        const cacheMeta = cacheLabel ? `<span class="gamalytics-cache">${cacheLabel}</span>` : "";
+        const recoveryLink = res.needsBrowserCheck ? `
+                    <a class="gamalytics-recovery" href="${gamalyticUrl}" target="_blank">
+                    Refresh Gamalytic access
+                    </a>
+                    ` : "";
 
         const released = d.unreleased === false;
 
@@ -91,10 +114,13 @@
             newBlock.innerHTML = `
                 <div class="gamalytics-block">
                     <div class="gamalytics-header">
-                    <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
-                    <b>Gamalytics</b>
-                    </a>
-                    ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
+                    <div>
+                        <a href="${gamalyticUrl}" target="_blank" style="text-decoration: none; color: inherit;">
+                        <b>Gamalytics</b>
+                        </a>
+                        ${cookieMeta}
+                    </div>
+                    ${cacheMeta}
                     </div>
                     <div class="gamalytics-stats">
                     <div class="gamalytics-stat">
@@ -122,6 +148,7 @@
                         <span class="gamalytics-value">${currentPlayers?.toLocaleString() ?? "N/A"}</span>
                     </div>
                     </div>
+                    ${recoveryLink}
                 </div>
                 `
         }
@@ -129,10 +156,13 @@
             newBlock.innerHTML = `
                 <div class="gamalytics-block">
                 <div class="gamalytics-header">
-                    <a href="https://gamalytic.com/game/${appId}" target="_blank" style="text-decoration: none; color: inherit;">
-                    <b>Gamalytics</b>
-                    </a>
-                    ${isCached ? `<span class="gamalytics-cache">${cacheAge != null ? fmtTimeAgo(Date.now() - cacheAge) : ""}</span>` : ""}
+                    <div>
+                        <a href="${gamalyticUrl}" target="_blank" style="text-decoration: none; color: inherit;">
+                        <b>Gamalytics</b>
+                        </a>
+                        ${cookieMeta}
+                    </div>
+                    ${cacheMeta}
                 </div>
                 <div class="gamalytics-stats">
                     <div class="gamalytics-stat">
@@ -144,6 +174,7 @@
                     <span class="gamalytics-value">+${dailyWishlists.toLocaleString()}</span>
                     </div>
                 </div>
+                ${recoveryLink}
                 </div>
             `;
         }
@@ -229,6 +260,31 @@
         if (hours > 0) return `${hours}h ago`;
         if (minutes > 0) return `${minutes}m ago`;
         return "Just now";
+    }
+
+    function renderCookieMeta(res) {
+        if (res?.cookieStatus?.age != null) {
+            const cookieAge = fmtTimeAgo(Date.now() - res.cookieStatus.age);
+            const expiresAt = res.cookieStatus.expiresAt
+                ? `, expires in ${fmtDuration(res.cookieStatus.expiresAt - Date.now())}`
+                : "";
+            return `<div class="gamalytics-meta"><span class="gamalytics-cache" title="${res.cookieStatus.name}${expiresAt}">cookie ${cookieAge} old</span></div>`;
+        }
+
+        return `<div class="gamalytics-meta"><span class="gamalytics-cache">no cookie</span></div>`;
+    }
+
+    function fmtDuration(ms) {
+        if (ms == null) return "N/A";
+        const abs = Math.abs(ms);
+        const minutes = Math.floor(abs / (1000 * 60));
+        const hours = Math.floor(abs / (1000 * 60 * 60));
+        const days = Math.floor(abs / (1000 * 60 * 60 * 24));
+
+        if (days > 0) return `${days}d`;
+        if (hours > 0) return `${hours}h`;
+        if (minutes > 0) return `${minutes}m`;
+        return "less than 1m";
     }
 
     function fmtDiff(value, label) {

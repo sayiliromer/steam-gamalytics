@@ -33,6 +33,14 @@
   font-style: italic;
 }
 
+.gamalytics-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
 .gamalytics-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -87,4 +95,13 @@
   padding: 12px 0;
   color: #d94a38 !important;
   font-size: 11px;
+}
+
+.gamalytics-recovery {
+  display: block;
+  margin: 0 auto 6px;
+  color: #66c0f4 !important;
+  font-size: 11px;
+  text-align: center;
+  text-decoration: underline;
 }
